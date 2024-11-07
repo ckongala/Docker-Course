@@ -121,5 +121,3 @@ ADD <src> <dest>
 - **Use `ENTRYPOINT`** when you need the container to always run a specific command.
 - **Use `COPY`** for a simple file copy operation.
 - **Use `ADD`** when you need extra functionality like automatic tar file extraction or the ability to fetch files from remote URLs.
-
-Let me know if you'd like further details or examples!
