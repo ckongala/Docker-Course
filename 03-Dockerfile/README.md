@@ -1,4 +1,4 @@
-### Explanation of `FROM` in Dockerfile
+### `FROM` in Dockerfile
 
 The `FROM` instruction is one of the most important and fundamental commands in a Dockerfile. It tells Docker which **base image** to use when creating a new Docker image.
 
