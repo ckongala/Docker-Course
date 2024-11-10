@@ -545,317 +545,287 @@ Thus, `COPY . .` and `RUN npm install` will execute within `/app/src` in the con
 
 By using both `USER` and `WORKDIR`, you improve the security, structure, and maintainability of your Dockerfile, which leads to a more efficient and safe containerized environment.
 
-
-
-
-
-### `RUN` Instruction in Dockerfile: Explanation
-
-The `RUN` instruction in a Dockerfile is one of the most commonly used commands. It is used to **execute commands** inside a Docker container during the **image build process**. It allows you to install software packages, configure settings, and perform tasks needed to set up the environment inside the container. 
-
-When a `RUN` command is executed in a Dockerfile, it generates a new **layer** in the Docker image. This means that every `RUN` command adds a new layer to the final image, which can affect the image size and build time.
-
-Let's break down the usage and behavior of `RUN` in detail.
+In Dockerfile, `RUN`, `ADD`, and `COPY` are all instructions used to manage how files are added to an image and how the image itself is built, but they serve different purposes and are used in different contexts. Here's a detailed comparison of the three:
 
 ---
 
-### Syntax
+### 1. `RUN`
+- **Purpose**: Executes a shell command in the container **during** the build process. It's commonly used to install software, configure settings, and perform other operations that modify the image’s filesystem.
 
-```dockerfile
-RUN <command>
-```
+- **Common Use**: 
+  - Installing packages via package managers like `apt`, `yum`, or `apk`.
+  - Setting environment variables.
+  - Running scripts to configure the image.
 
-- **`<command>`**: The command to execute. This could be any shell command (Linux commands like `apt-get install`, `pip install`, `npm install`, etc.) or script (bash, shell script, etc.).
+- **How it Works**:
+  - `RUN` takes a command or script and runs it in a new layer in the image.
+  - Each `RUN` command results in a new layer in the image, which is cached and re-used if the command or layer hasn't changed.
 
-You can also chain multiple commands in a single `RUN` instruction using shell operators like `&&`, `||`, and `;` to run multiple commands sequentially.
-
-```dockerfile
-RUN <command> && <another command> && <third command>
-```
-
----
-
-### Types of `RUN`
-
-Docker provides two different forms of the `RUN` instruction:
-
-1. **Shell form**:
-    - This is the most common and basic form of `RUN` and uses the default shell (`/bin/sh -c` on Linux-based systems).
-    - It doesn't require specifying the shell explicitly.
-    
-    **Example**:
-    ```dockerfile
-    RUN apt-get update && apt-get install -y curl
-    ```
-
-    This command will execute `apt-get update` and then `apt-get install` using the default shell.
-    
-2. **Exec form**:
-    - This form does not invoke a shell and directly runs the executable in the command array. This form is preferred when you want to run an executable directly without shell processing.
-    - It is used when there’s no need to use shell features (like piping, redirecting, etc.).
-
-    **Example**:
-    ```dockerfile
-    RUN ["apt-get", "install", "-y", "curl"]
-    ```
-
-    This will directly run `apt-get install -y curl` without invoking a shell, which is generally a cleaner and more predictable way to run commands in Dockerfiles.
-   
-    **Key Differences**:
-    - The shell form (`RUN <command>`) invokes a shell to run the command, meaning that environment variables and shell-specific syntax can be used.
-    - The exec form (`RUN ["executable", "param1", "param2"]`) directly executes the command without shell processing. This is often more efficient and avoids issues with shell expansions.
-
----
-
-### What Happens When `RUN` is Executed?
-
-- When a `RUN` command is executed, Docker creates a **new layer** on top of the existing image. The result of the `RUN` command is saved as that new layer.
-- Layers are cached during the build process. This means that if you re-run the Docker build and the `RUN` command hasn't changed, Docker will use the cache from the previous build to speed up the process.
-- Since each `RUN` command adds a layer to the image, you should be mindful of how many `RUN` commands you use because having too many layers could increase the size of the final image.
-  
-  **Example of caching**:
-  If you have multiple `RUN` commands:
-  ```dockerfile
-  RUN apt-get update
-  RUN apt-get install -y curl
-  RUN apt-get install -y git
-  ```
-  Docker will cache each layer, meaning if the `RUN` commands haven't changed, Docker can reuse the previous cache to avoid re-running the same commands, speeding up the build process.
-
----
-
-### Best Practices for Using `RUN`
-
-#### 1. **Minimize Number of Layers**
-Since each `RUN` command creates a new image layer, it’s a good practice to **combine related commands** into a single `RUN` instruction when possible. This reduces the total number of layers in the final image, keeping the image size smaller and the build process faster.
-
-**Example** (Bad Practice: Multiple Layers):
-```dockerfile
-RUN apt-get update
-RUN apt-get install -y curl
-RUN apt-get install -y git
-```
-
-**Better Practice: Combine Commands into One Layer**:
-```dockerfile
-RUN apt-get update && \
-    apt-get install -y curl git && \
-    rm -rf /var/lib/apt/lists/*
-```
-
-In this case:
-- `&&` is used to chain commands together, so only one layer is created.
-- The `rm -rf /var/lib/apt/lists/*` cleans up unnecessary cache files created during the `apt-get` installation, reducing the image size.
-
-#### 2. **Avoid Cache Busting**
-A common mistake is creating layers that are unnecessarily **invalidated** on every build, which can significantly increase build time. Docker caches layers, so if you change something in a layer (e.g., installing a package), Docker will re-run that step, and the cache will be invalidated for all subsequent layers.
-
-For example:
-```dockerfile
-RUN apt-get install -y curl
-RUN apt-get install -y git
-```
-If you change something in one of the above commands (e.g., add a new package), Docker will invalidate the cache for all `RUN` commands after it.
-
-**Better Practice**: Combine the commands and install all dependencies in one step.
-```dockerfile
-RUN apt-get update && \
-    apt-get install -y curl git
-```
-
-This way, the cache is invalidated less frequently, which improves build efficiency.
-
-#### 3. **Clean Up Temporary Files**
-When you install packages, certain files like cache files or installation logs can be left behind in the image. These files can increase the image size unnecessarily. You should always clean up temporary files at the end of the `RUN` command.
-
-**Example**:
-```dockerfile
-RUN apt-get update && \
-    apt-get install -y curl && \
-    rm -rf /var/lib/apt/lists/*  # Cleanup APT cache
-```
-
-The `rm -rf /var/lib/apt/lists/*` command ensures that the package lists from `apt-get` are removed after installation, reducing the size of the final image.
-
----
-
-### Use Cases for `RUN`
-
-1. **Install Software Packages**:
-   - Most often, `RUN` is used to install software or utilities inside the Docker image.
-
-   **Example**:
-   ```dockerfile
-   RUN apt-get update && apt-get install -y nginx
-   ```
-
-2. **File Operations**:
-   - `RUN` can also be used for tasks such as copying files, changing permissions, or creating directories.
-
-   **Example**:
-   ```dockerfile
-   RUN mkdir /data && chmod 755 /data
-   ```
-
-3. **Configure the System**:
-   - You might want to configure services or do some system-level configuration.
-
-   **Example**:
-   ```dockerfile
-   RUN echo "export PATH=$PATH:/custom/path" >> ~/.bashrc
-   ```
-
-4. **Run Scripts**:
-   - Often, `RUN` is used to execute custom scripts or configurations.
-
-   **Example**:
-   ```dockerfile
-   COPY setup.sh /setup.sh
-   RUN bash /setup.sh
-   ```
-
-5. **Combine Multiple Commands**:
-   - As shown earlier, you can chain multiple commands using `&&` to combine related tasks into a single layer.
-
----
-
-### Summary of `RUN`
-
-- **Purpose**: Executes commands during the Docker image build process.
-- **Types**: Shell form (`RUN <command>`) and exec form (`RUN ["executable", "param1", "param2"]`).
-- **Layer Creation**: Each `RUN` command creates a new image layer.
-- **Caching**: Docker caches layers for efficiency, so re-building unchanged layers is faster.
-- **Best Practices**:
-  - Minimize the number of `RUN` commands.
-  - Clean up unnecessary files to reduce image size.
-  - Avoid unnecessary cache busting.
-  - Combine related commands in a single `RUN` instruction using `&&`.
-
-By carefully using `RUN` in a Dockerfile, you can significantly improve the build performance, manageability, and size of your Docker images.
-
-In Docker, both `CMD` and `ENTRYPOINT`, as well as `COPY` and `ADD` in a **Dockerfile**, serve important roles, but they have specific use cases and behaviors. Let’s break them down clearly:
-
-### 1. **`CMD` vs `ENTRYPOINT`**
-
-Both `CMD` and `ENTRYPOINT` define the command that will be executed when the Docker container starts. However, they behave differently in terms of flexibility and use cases.
-
-#### **`CMD`**
-- **Purpose**: The `CMD` directive is used to specify the **default command** that will be executed when a container starts.
-- **Syntax**: It can be defined in 3 forms:
-  1. **CMD ["executable", "param1", "param2"]** (exec form) — Preferred because it doesn’t invoke a shell and thus avoids issues with signal handling.
-  2. **CMD ["param1", "param2"]** (as an entry point to a specific executable).
-  3. **CMD ["executable", "param1", "param2"]** (shell form) — This will invoke a shell (`/bin/sh -c`), which can have issues with signal handling.
-  
-- **Behavior**:
-  - It **can be overridden** when running a container. For example, you can override `CMD` by providing a command at the end of the `docker run` command:
-    ```bash
-    docker run <image> <override-command>
-    ```
-
-- **Use Case**: You use `CMD` when you want to provide a default command, but also allow the flexibility to override it with a different command if necessary.
-
-#### **`ENTRYPOINT`**
-- **Purpose**: The `ENTRYPOINT` directive sets the **command that is always executed** when the container starts. It is typically used to define the **main process** of the container, which should always be run.
 - **Syntax**:
-  1. **ENTRYPOINT ["executable", "param1", "param2"]** (exec form) — Preferred form.
-  2. **ENTRYPOINT ["executable", "param1", "param2"]** (shell form) — Uses the shell to invoke the command.
-  
-- **Behavior**:
-  - Unlike `CMD`, the command in `ENTRYPOINT` **cannot be easily overridden** by providing a command at the end of the `docker run` command. 
-  - However, if you need to **override** the parameters or append commands, you can use `CMD` along with `ENTRYPOINT`.
-  
-- **Use Case**: `ENTRYPOINT` is used when you want the container to always execute a specific process (e.g., a server or application). If you need to pass additional arguments to the command, combine `ENTRYPOINT` and `CMD`.
-
-#### **Difference in behavior**:
-- If both `ENTRYPOINT` and `CMD` are provided, `CMD` provides **default arguments** to the `ENTRYPOINT` command.
-- If `ENTRYPOINT` is not defined, `CMD` will act as the full command to run.
-  
-**Example:**
-
-```dockerfile
-FROM ubuntu
-
-# Entry point is always 'echo'
-ENTRYPOINT ["echo"]
-
-# Default arguments are passed from CMD
-CMD ["Hello", "World"]
-
-# When running the container, you get: 'Hello World'
-```
-
-If you run the container with `docker run <image> Goodbye`, it will output `Goodbye` instead of the default `Hello World` because the `ENTRYPOINT` remains `echo` but the `CMD` is overridden.
-
----
-
-### 2. **`COPY` vs `ADD`**
-
-Both `COPY` and `ADD` are used to copy files from the host machine into the Docker container, but they have some subtle differences in behavior.
-
-#### **`COPY`**
-- **Purpose**: The `COPY` instruction is the **simplest** way to copy files from the **host** to the **container**.
-- **Behavior**: It **only copies files and directories**.
-- **Use Case**: Use `COPY` when you simply want to copy files or directories from the build context into the image.
-  
-**Syntax**:
-```dockerfile
-COPY <src> <dest>
-```
+  ```dockerfile
+  RUN <command>
+  ```
 
 - **Example**:
   ```dockerfile
-  COPY ./localfile.txt /usr/src/app/
+  RUN apt-get update && apt-get install -y nginx
   ```
+  This command will:
+  - Update the package lists.
+  - Install the `nginx` package.
 
-  This will copy the file `localfile.txt` from the build context into the `/usr/src/app/` directory of the container.
+- **Important Notes**:
+  - `RUN` is used for executing commands inside the image. It’s not for copying files from the host machine.
+  - You should be aware that the `RUN` commands can **increase the size of the image** since they create new layers.
 
-#### **`ADD`**
-- **Purpose**: The `ADD` instruction does everything `COPY` does, but with additional functionality.
-- **Behavior**:
-  - **Extracts tar files**: If you `ADD` a `.tar`, `.tar.gz`, or `.tar.bz2` file, it will be **automatically extracted** into the container's destination directory.
-  - **Supports remote URLs**: You can provide a **URL** as the source and `ADD` will download the file into the container.
+---
+
+### 2. `ADD`
+- **Purpose**: Copies files or directories from the local machine or from a URL **into the Docker image**. It has more advanced features than `COPY`, such as extracting compressed files automatically.
+
+- **Common Use**:
+  - Copying files from the build context (the directory where the Dockerfile is located) to the image.
+  - Copying files from a remote URL into the image.
+  - Automatically unpacking compressed files (e.g., `.tar`, `.gz`).
+
+- **How it Works**:
+  - `ADD` can copy files from the local filesystem or fetch files from a URL and add them to the image. 
+  - If the source is a tarball (`.tar`, `.tar.gz`, etc.), `ADD` will automatically extract it to the target location in the image.
   
-**Syntax**:
-```dockerfile
-ADD <src> <dest>
-```
+- **Syntax**:
+  ```dockerfile
+  ADD <source> <destination>
+  ```
 
 - **Example**:
   ```dockerfile
-  ADD ./localfile.txt /usr/src/app/
+  ADD ./myfile.tar.gz /app/
   ```
+  This command:
+  - Adds the `myfile.tar.gz` archive to the `/app` directory in the image and automatically extracts the contents.
 
-  Like `COPY`, this will copy the `localfile.txt` from the build context to the container.
+- **Important Notes**:
+  - `ADD` can fetch files from URLs, which can be useful for downloading external resources.
+  - **Use caution** when using `ADD` for fetching remote files because it introduces unpredictability (e.g., URL might change or the file might not be available).
+  - **Prefer `COPY`** when simple file copying is required because `ADD` introduces extra functionality you might not need and can make Dockerfiles harder to reason about.
 
-  However:
+---
+
+### 3. `COPY`
+- **Purpose**: Copies files or directories from the **build context** (the local file system where the Docker build is initiated) into the Docker image. It is the simpler and more explicit file copy command compared to `ADD`.
+
+- **Common Use**: 
+  - Copying local files or directories into the image without the need for additional processing (such as extracting archives).
+  - For example, copying application files, configuration files, or dependencies.
+
+- **How it Works**:
+  - `COPY` simply copies files and directories from the source to the destination without performing any transformations. No remote URL fetching or archive extraction occurs.
+
+- **Syntax**:
   ```dockerfile
-  ADD http://example.com/file.tar.gz /usr/src/app/
+  COPY <source> <destination>
   ```
 
-  In this case, `ADD` will download the file from the provided URL and store it in `/usr/src/app/`. It will also **automatically extract** the contents if it’s a `.tar.gz`, `.tar.bz2`, or `.tar.xz` file.
+- **Example**:
+  ```dockerfile
+  COPY ./app /usr/src/app
+  ```
+  This command:
+  - Copies the `./app` directory (in the build context) into the `/usr/src/app` directory in the image.
 
-#### **Difference in behavior**:
-- **`COPY`**: Best used when you just need to copy files from one place to another without additional functionality.
-- **`ADD`**: Use it when you need the extra features of downloading from URLs or automatically extracting compressed files.
-
----
-
-### Key Differences Recap:
-
-| **Feature**        | **`CMD`**                               | **`ENTRYPOINT`**                         | **`COPY`**                                   | **`ADD`**                                         |
-|--------------------|-----------------------------------------|------------------------------------------|---------------------------------------------|--------------------------------------------------|
-| **Purpose**        | Default command to run in the container | Always runs a specific command          | Copy files from host to container           | Copy files + support URL & auto-extract tar files |
-| **Overridable**    | Yes, by providing a new command in `docker run` | No, unless combined with `CMD`           | No additional behavior                     | Automatically extracts tar files, supports URLs  |
-| **Use Case**       | Default command or arguments           | Main application or process to run      | Simply copying files                       | Copying files, extracting tar files, downloading |
-| **Override Example** | `docker run <image> <new-command>`     | `docker run <image> <new-command>` will not override it unless `CMD` is used | -                                           | -                                                |
+- **Important Notes**:
+  - **Use `COPY`** when you only need to copy files or directories without the extra functionality that `ADD` provides.
+  - `COPY` is preferred for file copying operations since it is more explicit and predictable. It avoids the unintended complexities of `ADD`.
 
 ---
 
-### Conclusion:
-- **Use `CMD`** when you want to define a **default command** that can be easily overridden.
-- **Use `ENTRYPOINT`** when you need the container to always run a specific command.
-- **Use `COPY`** for a simple file copy operation.
-- **Use `ADD`** when you need extra functionality like automatic tar file extraction or the ability to fetch files from remote URLs.
+### Key Differences at a Glance:
+
+| **Instruction** | **Primary Use**                                    | **Additional Features**              | **Common Use Case**                                      |
+|-----------------|-----------------------------------------------------|--------------------------------------|---------------------------------------------------------|
+| **RUN**         | Executes commands in the container to modify the image during build | Executes shell commands (e.g., install packages, run scripts) | Installing software, setting up environment, updating packages, modifying system configuration |
+| **ADD**         | Copies files or directories from local or URL into the image | Automatically extracts tarballs, fetches files from URLs | Copying files, fetching remote resources, extracting archives (tarballs, zip, etc.) |
+| **COPY**        | Copies files or directories from the build context to the image | No additional features (simple file copy) | Copying local files or directories into the image without extraction or remote fetching |
+
+---
+
+### When to Use Each:
+- **Use `RUN`** when you need to execute a shell command or script during the image build. This is ideal for installing dependencies, updating software, or performing system configuration.
+  - **Example**: Installing packages or running database migrations.
+  
+- **Use `ADD`** when you need to copy files and:
+  - You are downloading files from a URL.
+  - You want to extract `.tar` files into the image.
+  
+- **Use `COPY`** when you want to copy files or directories from the build context into the image, and you don’t need the extra functionality of `ADD` (like URL fetching or archive extraction).
+  - **Example**: Copying application code, configuration files, or assets into the image.
+
+---
+
+### General Best Practices:
+- **Prefer `COPY` over `ADD`**: Unless you need the specific features of `ADD`, it’s generally safer to use `COPY`. It's explicit and easier to understand.
+- **Avoid using `ADD` for URL fetching**: It's usually better to use `RUN` to download files via `curl` or `wget`, so you can control when and how the download occurs.
+- **Minimize the number of `RUN` commands**: Combining related `RUN` commands into one can reduce the number of layers in the final image, improving performance and making the Dockerfile cleaner.
+
+### Example Dockerfile:
+
+```dockerfile
+# Use an official Python runtime as a parent image
+FROM python:3.8-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the current directory contents into the container at /app
+COPY . /app
+
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Make port 80 available to the world outside this container
+EXPOSE 80
+
+# Run app.py when the container launches
+CMD ["python", "app.py"]
+```
+
+Here:
+- `COPY` copies application code to the image.
+- `RUN` installs Python dependencies.
+
+
+In a Dockerfile, both **`CMD`** and **`ENTRYPOINT`** are used to specify what commands should be run when the container starts, but they serve different purposes and behave differently. Understanding when and how to use each is crucial for defining the default behavior of a Docker container.
+
+Here's a detailed comparison between `CMD` and `ENTRYPOINT`:
+
+---
+
+### 1. **`CMD`**
+
+- **Purpose**: Specifies the default command to run when the container is started, **but it can be overridden** by the user at runtime (i.e., when running the container with `docker run`).
+
+- **Common Use**: 
+  - **Default Arguments** for a command that the container runs.
+  - To define a "default" behavior that can be modified if needed.
+
+- **How it Works**:
+  - If you provide `CMD` in the Dockerfile, it defines the default command and its arguments that the container will run when started.
+  - If no command is specified during `docker run`, then `CMD` will be used.
+  - However, if you provide a command as an argument to `docker run`, it will **override the CMD**.
+
+- **Syntax**: 
+  ```dockerfile
+  CMD ["executable", "param1", "param2"]
+  CMD ["param1", "param2"]
+  CMD ["executable", "param1", "param2"]
+  CMD ["echo", "Hello World"]
+  ```
+  
+- **Example**:
+  ```dockerfile
+  FROM ubuntu:20.04
+
+  CMD ["echo", "Hello, Docker!"]
+  ```
+
+  This will run `echo "Hello, Docker!"` when the container starts. However, if you run the container with a different command like `docker run my-image ls`, it will run `ls` instead.
+
+- **Important Notes**:
+  - `CMD` can be overridden with a different command when running the container.
+  - It is often used to provide default arguments to the entry point.
+  - You can also use `CMD` with a shell form (`CMD command arg1 arg2`) or exec form (`CMD ["executable", "param1", "param2"]`). The exec form is generally preferred because it does not invoke a shell and allows signals to be passed directly to the executable (important for things like graceful shutdowns).
+
+---
+
+### 2. **`ENTRYPOINT`**
+
+- **Purpose**: Defines the **primary command** to run when the container starts, and it **cannot be easily overridden**. It sets up the main executable for the container.
+
+- **Common Use**:
+  - **To define the container's primary function**, typically for the main process the container will execute.
+  - It is often used when you want to ensure the container always runs a specific application or script, regardless of what command is passed when running the container.
+
+- **How it Works**:
+  - When you define `ENTRYPOINT`, it specifies the **command** to run inside the container.
+  - You can provide additional arguments using the `CMD` instruction, which are passed to the `ENTRYPOINT`.
+  - If you provide arguments with `docker run`, they will be appended to the `ENTRYPOINT` command.
+
+- **Syntax**:
+  ```dockerfile
+  ENTRYPOINT ["executable", "param1", "param2"]
+  ENTRYPOINT ["executable", "param1"]
+  ENTRYPOINT ["echo"]
+  ```
+
+- **Example**:
+  ```dockerfile
+  FROM ubuntu:20.04
+
+  ENTRYPOINT ["echo"]
+  CMD ["Hello, Docker!"]
+  ```
+
+  In this case, when the container starts, it will run `echo` with the argument from `CMD`, i.e., `Hello, Docker!`. If you run `docker run my-image Goodbye!`, it will run `echo Goodbye!` instead. However, `echo` will always be the entry point, and only its arguments can be overridden.
+
+- **Important Notes**:
+  - **`ENTRYPOINT` cannot be easily overridden**, but it can accept additional arguments at runtime.
+  - You can combine `ENTRYPOINT` with `CMD` to provide default arguments, which can still be modified when running the container.
+  - Typically used for containers where a single primary command is always executed (e.g., starting a web server, running a specific script, etc.).
+
+---
+
+### Key Differences Between `CMD` and `ENTRYPOINT`:
+
+| Feature                | **`CMD`**                                     | **`ENTRYPOINT`**                               |
+|------------------------|-----------------------------------------------|------------------------------------------------|
+| **Purpose**            | Defines the default command and arguments for the container. Can be overridden by the user. | Defines the default command to run in the container. Cannot be easily overridden. |
+| **Override Behavior**  | Can be overridden by providing a different command at runtime (`docker run <image> <new-command>`). | Cannot be easily overridden (unless using `--entrypoint` with `docker run`). |
+| **Common Use**         | To set default parameters for a command or specify a fallback command that can be changed. | To ensure a container always runs a specific executable or script. |
+| **Interaction with `docker run`** | If you provide a command with `docker run`, it overrides the `CMD`. | If you provide a command with `docker run`, it is passed as an argument to `ENTRYPOINT`. |
+| **Use with `CMD`**     | Often used alongside `ENTRYPOINT` to provide default arguments. | Often used with `CMD` to provide default arguments that can be modified. |
+| **Example**            | `CMD ["echo", "Hello World"]` <br> Overridden by `docker run my-image ls`. | `ENTRYPOINT ["echo"]` <br> Cannot be overridden; `docker run my-image Goodbye!` will run `echo Goodbye!`. |
+
+---
+
+### Combining `CMD` and `ENTRYPOINT`:
+
+You can use both `CMD` and `ENTRYPOINT` together to create flexible and robust container configurations. 
+
+- **Use Case**: `ENTRYPOINT` defines the primary executable, while `CMD` defines default arguments. This allows you to run the same executable but change its behavior by modifying the `CMD` without changing the `ENTRYPOINT`.
+
+#### Example:
+```dockerfile
+FROM ubuntu:20.04
+
+ENTRYPOINT ["python3", "app.py"]
+CMD ["--port", "8080"]
+```
+
+- **Default behavior**: When the container is run without additional arguments (`docker run my-image`), it will run:
+  ```bash
+  python3 app.py --port 8080
+  ```
+- **Override behavior**: If you run:
+  ```bash
+  docker run my-image --port 9090
+  ```
+  It will run:
+  ```bash
+  python3 app.py --port 9090
+  ```
+  The `ENTRYPOINT` (the command `python3 app.py`) cannot be overridden, but the `CMD` (the default argument `--port 8080`) can be changed.
+
+---
+
+### Summary:
+- **`CMD`**: Defines default commands and arguments but can be easily overridden by passing new arguments when running the container.
+- **`ENTRYPOINT`**: Defines the primary command to run in the container. It cannot be overridden easily and always executes when the container starts.
+  
+In practice:
+- **Use `ENTRYPOINT`** to specify the main process for the container.
+- **Use `CMD`** to provide default arguments or commands that can be easily overridden when needed. 
+
+When used together, `ENTRYPOINT` and `CMD` allow for flexible and reusable Docker images that can have default behaviors but also allow for customization.
 
 
 ### `EXPOSE` Instruction in Dockerfile: Detailed Explanation
